@@ -59,7 +59,7 @@ impl Default for VisibleApps {
             opencode: true,
             openclaw: true,
             hermes: false, // 默认不显示，需用户手动启用
-            omp: false,    // 默认不显示，需用户手动启用
+            omp: true,     // 默认显示
         }
     }
 }

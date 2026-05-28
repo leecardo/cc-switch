@@ -190,7 +190,7 @@ function App() {
     opencode: true,
     openclaw: true,
     hermes: true,
-    omp: false,
+    omp: true,
   };
 
   const getFirstVisibleApp = (): AppId => {
