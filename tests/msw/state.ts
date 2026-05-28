@@ -72,6 +72,7 @@ const createDefaultProviders = (): ProvidersByApp => ({
   opencode: {},
   openclaw: {},
   hermes: {},
+  omp: {},
 });
 
 const createDefaultCurrent = (): CurrentProviderState => ({
@@ -82,6 +83,7 @@ const createDefaultCurrent = (): CurrentProviderState => ({
   opencode: "",
   openclaw: "",
   hermes: "",
+  omp: "",
 });
 
 let providers = createDefaultProviders();
@@ -151,6 +153,7 @@ const createDefaultSessionMessages = (): Record<string, SessionMessage[]> => ({
 let sessionsState = createDefaultSessions();
 let sessionMessagesState = createDefaultSessionMessages();
 let mcpConfigs: McpConfigState = {
+  omp: {},
   claude: {
     sample: {
       id: "sample",
@@ -163,6 +166,7 @@ let mcpConfigs: McpConfigState = {
         opencode: false,
         openclaw: false,
         hermes: false,
+      omp: false,
       },
       server: {
         type: "stdio",
@@ -183,6 +187,7 @@ let mcpConfigs: McpConfigState = {
         opencode: false,
         openclaw: false,
         hermes: false,
+      omp: false,
       },
       server: {
         type: "http",
@@ -231,6 +236,7 @@ export const resetProviderState = () => {
           opencode: false,
           openclaw: false,
           hermes: false,
+      omp: false,
         },
         server: {
           type: "stdio",
@@ -251,6 +257,7 @@ export const resetProviderState = () => {
           opencode: false,
           openclaw: false,
           hermes: false,
+      omp: false,
         },
         server: {
           type: "http",
@@ -262,6 +269,7 @@ export const resetProviderState = () => {
     opencode: {},
     openclaw: {},
     hermes: {},
+    omp: {},
   };
 };
 

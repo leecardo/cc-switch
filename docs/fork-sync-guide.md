@@ -82,7 +82,7 @@ git fetch upstream
 git merge --ff-only upstream/main
 git push origin main
 git checkout feat/omp-support-v1
-git rebase main
+git r+ebase main
 ```
 
 ## 6. 如果想用 GitHub 网页上的 Sync fork
