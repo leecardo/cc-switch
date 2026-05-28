@@ -700,6 +700,13 @@ pub fn run() {
                     Ok(_) => log::debug!("○ No Hermes MCP servers found to import"),
                     Err(e) => log::warn!("✗ Failed to import Hermes MCP: {e}"),
                 }
+                match crate::mcp::import_from_omp(&mut config) {
+                    Ok(count) if count > 0 => {
+                        log::info!("✓ Imported {count} MCP server(s) from OMP");
+                    }
+                    Ok(_) => log::debug!("○ No OMP MCP servers found to import"),
+                    Err(e) => log::warn!("✗ Failed to import OMP MCP: {e}"),
+                }
             }
 
             // 4. 导入提示词文件（表空时触发）
