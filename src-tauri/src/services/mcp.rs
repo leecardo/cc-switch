@@ -137,6 +137,10 @@ impl McpService {
             AppType::Hermes => {
                 mcp::sync_single_server_to_hermes(&Default::default(), &server.id, &server.server)?;
             }
+            AppType::Omp => {
+                // OMP MCP support not yet implemented
+                log::debug!("OMP MCP support not yet implemented, skipping sync");
+            }
         }
         Ok(())
     }
@@ -171,6 +175,10 @@ impl McpService {
             }
             AppType::Hermes => {
                 mcp::remove_server_from_hermes(id)?;
+            }
+            AppType::Omp => {
+                // OMP MCP support not yet implemented
+                log::debug!("OMP MCP support not yet implemented, skipping remove");
             }
         }
         Ok(())

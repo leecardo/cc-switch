@@ -849,6 +849,10 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
             crate::hermes_config::set_provider(&provider.id, provider.settings_config.clone())?;
             log::debug!("Hermes provider '{}' written to live config", provider.id);
         }
+        AppType::Omp => {
+            // TODO: Phase 2 - write provider to models.yml
+            log::debug!("OMP provider '{}' live sync skipped (not yet implemented)", provider.id);
+        }
     }
     Ok(())
 }
@@ -1064,6 +1068,10 @@ pub fn read_live_settings(app_type: AppType) -> Result<Value, AppError> {
             let yaml_config = crate::hermes_config::read_hermes_config()?;
             let config = crate::hermes_config::yaml_to_json(&yaml_config)?;
             Ok(config)
+        }
+        AppType::Omp => {
+            // Return empty config for now - OMP config adapter not yet fully implemented
+            Ok(serde_json::json!({}))
         }
     }
 }

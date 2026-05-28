@@ -136,6 +136,9 @@ impl ConfigService {
             AppType::Hermes => {
                 // Hermes uses additive mode, no live sync needed
             }
+            AppType::Omp => {
+                // OMP: switch mode, handled by standard live sync
+            }
         }
 
         Ok(())
