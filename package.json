@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm tauri dev",
-    "build": "pnpm tauri build",
+    "build": "pnpm tauri build && node scripts/rename-tauri-bundles.mjs",
     "tauri": "tauri",
     "dev:renderer": "vite",
     "build:renderer": "vite build",
