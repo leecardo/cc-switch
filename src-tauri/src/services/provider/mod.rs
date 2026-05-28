@@ -22,8 +22,8 @@ use crate::store::AppState;
 
 // Re-export sub-module functions for external access
 pub use live::{
-    import_default_config, import_hermes_providers_from_live, import_openclaw_providers_from_live,
-    import_opencode_providers_from_live, read_live_settings,
+    import_default_config, import_hermes_providers_from_live, import_omp_providers_from_live,
+    import_openclaw_providers_from_live, import_opencode_providers_from_live, read_live_settings,
     should_import_default_config_on_startup, sync_current_to_live,
 };
 
@@ -2351,6 +2351,15 @@ impl ProviderService {
                         "provider.hermes.settings.not_object",
                         "Hermes 配置必须是 JSON 对象",
                         "Hermes configuration must be a JSON object",
+                    ));
+                }
+            }
+            AppType::Omp => {
+                if !provider.settings_config.is_object() {
+                    return Err(AppError::localized(
+                        "provider.omp.settings.not_object",
+                        "OMP 配置必须是 JSON 对象",
+                        "OMP configuration must be a JSON object",
                     ));
                 }
             }

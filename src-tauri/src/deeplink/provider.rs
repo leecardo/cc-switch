@@ -426,6 +426,27 @@ fn build_additive_app_settings(request: &DeepLinkImportRequest) -> serde_json::V
     json!(config)
 }
 
+fn build_omp_settings(request: &DeepLinkImportRequest) -> serde_json::Value {
+    let mut config = serde_json::Map::new();
+
+    let endpoint = get_primary_endpoint(request);
+    if !endpoint.trim().is_empty() {
+        config.insert("baseUrl".to_string(), json!(endpoint));
+    }
+    if let Some(api_key) = &request.api_key {
+        config.insert("apiKey".to_string(), json!(api_key));
+    }
+
+    // Default to OpenAI-compatible API for OMP custom providers
+    config.insert("api".to_string(), json!("openai-completions"));
+
+    if let Some(model) = &request.model {
+        config.insert("models".to_string(), json!([{ "id": model, "name": model }]));
+    }
+
+    serde_json::Value::Object(config)
+}
+
 /// Build Hermes provider settings (snake_case YAML-native fields).
 ///
 /// Hermes' `custom_providers:` entries use `base_url` / `api_key` / `api_mode`

@@ -90,10 +90,11 @@ impl Database {
                     gemini: row.get(10)?,
                     opencode: row.get(11)?,
                     hermes: row.get(12)?,
+                    omp: row.get(13)?,
                 },
-                installed_at: row.get(13)?,
-                content_hash: row.get(14)?,
-                updated_at: row.get::<_, i64>(15).unwrap_or(0),
+                installed_at: row.get(14)?,
+                content_hash: row.get(15)?,
+                updated_at: row.get::<_, i64>(16).unwrap_or(0),
             })
         });
 

@@ -700,7 +700,7 @@ pub fn run() {
                     Ok(_) => log::debug!("○ No Hermes MCP servers found to import"),
                     Err(e) => log::warn!("✗ Failed to import Hermes MCP: {e}"),
                 }
-                match crate::mcp::import_from_omp(&mut config) {
+                match crate::services::mcp::McpService::import_from_omp(&app_state) {
                     Ok(count) if count > 0 => {
                         log::info!("✓ Imported {count} MCP server(s) from OMP");
                     }

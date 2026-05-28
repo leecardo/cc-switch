@@ -170,10 +170,12 @@ pub fn import_from_omp(config: &mut MultiAppConfig) -> Result<usize, AppError> {
             let server = crate::app_config::McpServer {
                 id: id.clone(),
                 name: id.clone(),
-                enabled: true,
                 apps,
                 server: spec.clone(),
-                ..Default::default()
+                description: None,
+                homepage: None,
+                docs: None,
+                tags: Vec::new(),
             };
             servers.insert(id.clone(), server);
             changed += 1;

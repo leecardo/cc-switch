@@ -245,7 +245,7 @@ pub fn apply_switch_defaults(
     };
 
     // Read existing modelRoles or create new
-    let mut config = read_config_yaml()?;
+    let config = read_config_yaml()?;
     let model_roles = config
         .get("modelRoles")
         .cloned()

@@ -403,6 +403,32 @@ impl McpService {
         Ok(new_count)
     }
 
+    /// 从 OMP 导入 MCP
+    pub fn import_from_omp(state: &AppState) -> Result<usize, AppError> {
+        let mut temp_config = crate::app_config::MultiAppConfig::default();
+        let count = crate::mcp::import_from_omp(&mut temp_config)?;
+
+        let mut new_count = 0;
+        if count > 0 {
+            if let Some(servers) = &temp_config.mcp.servers {
+                let mut existing = state.db.get_all_mcp_servers()?;
+                for server in servers.values() {
+                    let to_save = if let Some(existing_server) = existing.get(&server.id) {
+                        let mut merged = existing_server.clone();
+                        merged.apps.omp = true;
+                        merged
+                    } else {
+                        new_count += 1;
+                        server.clone()
+                    };
+                    state.db.save_mcp_server(&to_save)?;
+                    existing.insert(to_save.id.clone(), to_save.clone());
+                }
+            }
+        }
+        Ok(new_count)
+    }
+
     /// 从 Hermes 导入 MCP
     pub fn import_from_hermes(state: &AppState) -> Result<usize, AppError> {
         // 创建临时 MultiAppConfig 用于导入
