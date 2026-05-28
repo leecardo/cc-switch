@@ -245,6 +245,10 @@ describe("McpFormModal", () => {
         claude: true,
         codex: true,
         gemini: true,
+        opencode: false,
+        openclaw: false,
+        hermes: false,
+        omp: false,
       },
     });
     expect(onSave).toHaveBeenCalledTimes(1);
@@ -356,7 +360,7 @@ type = "stdio"
       enabled: true,
       description: "Old desc",
       server: { type: "stdio", command: "old" },
-      apps: { claude: true, codex: false, gemini: false },
+      apps: { claude: true, codex: false, gemini: false, omp: false },
     } as McpServer;
 
     const { onSave } = renderForm({
@@ -386,10 +390,11 @@ type = "stdio"
     expect(entry.id).toBe("existing");
     expect(entry.server.command).toBe("updated");
     expect(entry.enabled).toBe(true);
-    expect(entry.apps).toEqual({
+    expect(entry.apps).toMatchObject({
       claude: true,
       codex: false,
       gemini: false,
+      omp: false,
     });
     expect(onSave).toHaveBeenCalledTimes(1);
     expect(onSave).toHaveBeenCalledWith();
@@ -435,9 +440,42 @@ type = "stdio"
       opencode: false,
       openclaw: false,
       hermes: false,
+      omp: false,
     });
     expect(onSave).toHaveBeenCalledTimes(1);
     expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
+  it("allows enabling OMP for MCP entries", async () => {
+    renderForm();
+
+    fireEvent.change(screen.getByPlaceholderText("mcp.form.titlePlaceholder"), {
+      target: { value: "omp-server" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("mcp.form.jsonPlaceholder"), {
+      target: { value: '{"type":"stdio","command":"run"}' },
+    });
+
+    const ompCheckbox = screen.getByLabelText(
+      "mcp.unifiedPanel.apps.omp",
+    ) as HTMLInputElement;
+    expect(ompCheckbox.checked).toBe(false);
+    fireEvent.click(ompCheckbox);
+
+    fireEvent.click(screen.getByText("common.add"));
+
+    await waitFor(() => expect(upsertMock).toHaveBeenCalledTimes(1));
+    const [entry] = upsertMock.mock.calls.at(-1) ?? [];
+    expect(entry.id).toBe("omp-server");
+    expect(entry.apps).toEqual({
+      claude: true,
+      codex: true,
+      gemini: true,
+      opencode: false,
+      openclaw: false,
+      hermes: false,
+      omp: true,
+    });
   });
 
   it("保存失败时展示翻译后的错误并恢复按钮", async () => {

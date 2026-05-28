@@ -26,6 +26,7 @@ const ALL_APPS: AppId[] = [
   "opencode",
   "openclaw",
   "hermes",
+  "omp",
 ];
 const STORAGE_KEY = "cc-switch-last-app";
 

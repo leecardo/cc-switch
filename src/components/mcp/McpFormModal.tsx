@@ -599,6 +599,22 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
                     {t("mcp.unifiedPanel.apps.hermes")}
                   </label>
                 </div>
+
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="enable-omp"
+                    checked={enabledApps.omp}
+                    onCheckedChange={(checked: boolean) =>
+                      setEnabledApps({ ...enabledApps, omp: checked })
+                    }
+                  />
+                  <label
+                    htmlFor="enable-omp"
+                    className="text-sm text-foreground cursor-pointer select-none"
+                  >
+                    {t("mcp.unifiedPanel.apps.omp")}
+                  </label>
+                </div>
               </div>
             </div>
 

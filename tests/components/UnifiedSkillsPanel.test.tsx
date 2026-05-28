@@ -1,5 +1,5 @@
 import { createRef } from "react";
-import { render, screen, waitFor, act } from "@testing-library/react";
+import { render, screen, waitFor, act, fireEvent } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 import UnifiedSkillsPanel, {
@@ -52,7 +52,7 @@ vi.mock("@/hooks/useSkills", () => ({
         directory: "shared-skill",
         name: "Shared Skill",
         description: "Imported from Claude",
-        foundIn: ["claude"],
+        foundIn: ["claude", "omp"],
         path: "/tmp/shared-skill",
       },
     ],
@@ -83,7 +83,7 @@ describe("UnifiedSkillsPanel", () => {
           directory: "shared-skill",
           name: "Shared Skill",
           description: "Imported from Claude",
-          foundIn: ["claude"],
+          foundIn: ["claude", "omp"],
           path: "/tmp/shared-skill",
         },
       ],
@@ -91,6 +91,7 @@ describe("UnifiedSkillsPanel", () => {
     toggleSkillAppMock.mockReset();
     uninstallSkillMock.mockReset();
     importSkillsMock.mockReset();
+    importSkillsMock.mockResolvedValue([]);
     installFromZipMock.mockReset();
     deleteSkillBackupMock.mockReset();
     restoreSkillBackupMock.mockReset();
@@ -116,5 +117,40 @@ describe("UnifiedSkillsPanel", () => {
       expect(screen.getByText("Shared Skill")).toBeInTheDocument();
       expect(screen.getByText("/tmp/shared-skill")).toBeInTheDocument();
     });
+  });
+
+  it("imports unmanaged skills with OMP enabled when detected in OMP", async () => {
+    const ref = createRef<UnifiedSkillsPanelHandle>();
+
+    render(
+      <UnifiedSkillsPanel
+        ref={ref}
+        onOpenDiscovery={() => {}}
+        currentApp="claude"
+      />,
+    );
+
+    await act(async () => {
+      await ref.current?.openImport();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("skills.import")).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /skills\.importSelected/ }),
+    );
+
+    await waitFor(() => expect(importSkillsMock).toHaveBeenCalledTimes(1));
+    expect(importSkillsMock).toHaveBeenCalledWith([
+      {
+        directory: "shared-skill",
+        apps: expect.objectContaining({
+          claude: true,
+          omp: true,
+        }),
+      },
+    ]);
   });
 });
