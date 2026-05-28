@@ -44,6 +44,8 @@ pub(crate) fn provider_exists_in_live_config(
             .map(|providers| providers.contains_key(provider_id)),
         AppType::Hermes => crate::hermes_config::get_providers()
             .map(|providers| providers.contains_key(provider_id)),
+        AppType::Omp => crate::omp_config::get_providers()
+            .map(|providers| providers.contains_key(provider_id)),
         _ => Ok(false),
     }
 }
@@ -850,8 +852,8 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
             log::debug!("Hermes provider '{}' written to live config", provider.id);
         }
         AppType::Omp => {
-            // TODO: Phase 2 - write provider to models.yml
-            log::debug!("OMP provider '{}' live sync skipped (not yet implemented)", provider.id);
+            crate::omp_config::set_provider(&provider.id, provider.settings_config.clone())?;
+            log::debug!("OMP provider '{}' written to live config", provider.id);
         }
     }
     Ok(())
@@ -1070,8 +1072,9 @@ pub fn read_live_settings(app_type: AppType) -> Result<Value, AppError> {
             Ok(config)
         }
         AppType::Omp => {
-            // Return empty config for now - OMP config adapter not yet fully implemented
-            Ok(serde_json::json!({}))
+            let yaml_config = crate::omp_config::read_models_yaml()?;
+            let config = crate::omp_config::yaml_to_json(&yaml_config)?;
+            Ok(config)
         }
     }
 }
@@ -1485,6 +1488,57 @@ pub fn import_hermes_providers_from_live(state: &AppState) -> Result<usize, AppE
 
         imported += 1;
         log::info!("Imported Hermes provider '{name}' from live config");
+    }
+
+    Ok(imported)
+}
+
+/// Import all providers from OMP live config to database
+///
+/// This imports existing providers from ~/.omp/agent/models.yml
+/// into the CC Switch database. Each provider found will be added to the
+/// database with is_current set to false.
+pub fn import_omp_providers_from_live(state: &AppState) -> Result<usize, AppError> {
+    use crate::omp_config;
+
+    let providers = omp_config::get_providers()?;
+    if providers.is_empty() {
+        return Ok(0);
+    }
+
+    let mut imported = 0;
+    let existing_ids = state.db.get_provider_ids("omp")?;
+
+    for (id, config) in providers {
+        if id.trim().is_empty() {
+            log::warn!("Skipping OMP provider with empty id");
+            continue;
+        }
+
+        if existing_ids.contains(&id) {
+            log::debug!("OMP provider '{id}' already exists in database, skipping");
+            continue;
+        }
+
+        let name = config
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or(&id)
+            .to_string();
+
+        let mut provider = Provider::with_id(id.clone(), name, config, None);
+        provider.meta = Some(crate::provider::ProviderMeta {
+            live_config_managed: Some(true),
+            ..Default::default()
+        });
+
+        if let Err(e) = state.db.save_provider("omp", &provider) {
+            log::warn!("Failed to import OMP provider '{id}': {e}");
+            continue;
+        }
+
+        imported += 1;
+        log::info!("Imported OMP provider '{id}' from live config");
     }
 
     Ok(imported)

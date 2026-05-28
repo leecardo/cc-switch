@@ -1735,6 +1735,21 @@ impl ProviderService {
             }
         }
 
+        // OMP: update modelRoles.default in config.yml
+        if matches!(app_type, AppType::Omp) {
+            if let Err(e) =
+                crate::omp_config::apply_switch_defaults(&provider.id, &provider.settings_config)
+            {
+                log::warn!(
+                    "Failed to update OMP model defaults after switching to '{}': {e}",
+                    provider.id
+                );
+                result
+                    .warnings
+                    .push(format!("omp_model_defaults_failed:{}", provider.id));
+            }
+        }
+
         // For additive-mode providers that were DB-only (live_config_managed == Some(false)),
         // flip the flag to true now that the provider has been successfully written to the live
         // file. This ensures sync_all_providers_to_live() will include it on future syncs.
