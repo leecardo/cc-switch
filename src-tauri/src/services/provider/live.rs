@@ -1089,6 +1089,9 @@ pub fn import_default_config(state: &AppState, app_type: AppType) -> Result<bool
     if app_type.is_additive_mode() {
         return Ok(false);
     }
+    if matches!(app_type, AppType::Omp) {
+        return Ok(false);
+    }
 
     // 允许 "只有官方 seed 预设" 的情况下继续导入 live：
     // - 启动编排顺序是先 import 后 seed，新用户启动时 providers 为空，导入照常
@@ -1154,8 +1157,11 @@ pub fn import_default_config(state: &AppState, app_type: AppType) -> Result<bool
             })
         }
         // OpenCode, OpenClaw and Hermes use additive mode and are handled by early return above
-        AppType::OpenCode | AppType::OpenClaw | AppType::Hermes | AppType::Omp => {
+        AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => {
             unreachable!("additive mode apps are handled by early return")
+        }
+        AppType::Omp => {
+            unreachable!("OMP generic import is handled by early return")
         }
     };
 
