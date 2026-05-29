@@ -824,6 +824,46 @@ base_url = "http://localhost:8080"
 
     #[test]
     #[serial]
+    fn omp_live_import_skips_existing_provider_key_alias() {
+        with_test_home(|state, home| {
+            let provider = omp_provider("MyProvider", "cpa");
+            state
+                .db
+                .save_provider(AppType::Omp.as_str(), &provider)
+                .expect("seed OMP provider alias");
+
+            let omp_dir = home.join(".omp").join("agent");
+            fs::create_dir_all(&omp_dir).expect("create omp dir");
+            fs::write(
+                crate::omp_config::get_omp_models_path(),
+                r#"providers:
+  cpa:
+    name: cpa
+    baseUrl: https://cpa.example/v1
+    api: openai-completions
+    models:
+      - id: model-a
+"#,
+            )
+            .expect("seed models.yml");
+
+            let imported = import_omp_providers_from_live(state).expect("import OMP providers");
+
+            assert_eq!(imported, 0, "existing provider_key alias must not be duplicated");
+            let providers = state
+                .db
+                .get_all_providers(AppType::Omp.as_str())
+                .expect("read OMP DB providers");
+            assert!(providers.contains_key("MyProvider"));
+            assert!(
+                !providers.contains_key("cpa"),
+                "live import must not create a second DB row for the same provider_key"
+            );
+        });
+    }
+
+    #[test]
+    #[serial]
     fn sync_current_provider_for_app_skips_db_only_opencode_provider() {
         with_test_home(|state, _| {
             let provider = opencode_provider("db-only-opencode");

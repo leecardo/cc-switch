@@ -2,7 +2,7 @@
 //!
 //! Handles reading and writing live configuration files for Claude, Codex, and Gemini.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde_json::{json, Value};
 use toml_edit::{DocumentMut, Item, TableLike};
@@ -1513,6 +1513,24 @@ pub fn import_hermes_providers_from_live(state: &AppState) -> Result<usize, AppE
 /// This imports existing providers from ~/.omp/agent/models.yml
 /// into the CC Switch database. Each provider found will be added to the
 /// database with is_current set to false.
+fn omp_provider_key_from_config<'a>(id: &'a str, config: &'a Value) -> &'a str {
+    config
+        .get("provider_key")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(id)
+}
+
+fn omp_existing_provider_keys(state: &AppState) -> Result<HashSet<String>, AppError> {
+    Ok(state
+        .db
+        .get_all_providers("omp")?
+        .into_iter()
+        .map(|(id, provider)| omp_provider_key_from_config(&id, &provider.settings_config).to_string())
+        .collect())
+}
+
 pub fn import_omp_providers_from_live(state: &AppState) -> Result<usize, AppError> {
     use crate::omp_config;
 
@@ -1522,16 +1540,18 @@ pub fn import_omp_providers_from_live(state: &AppState) -> Result<usize, AppErro
     }
 
     let mut imported = 0;
-    let existing_ids = state.db.get_provider_ids("omp")?;
-
+    let mut existing_provider_keys = omp_existing_provider_keys(state)?;
     for (id, config) in providers {
         if id.trim().is_empty() {
             log::warn!("Skipping OMP provider with empty id");
             continue;
         }
 
-        if existing_ids.contains(&id) {
-            log::debug!("OMP provider '{id}' already exists in database, skipping");
+        let provider_key = omp_provider_key_from_config(&id, &config).to_string();
+        if existing_provider_keys.contains(&provider_key) {
+            log::debug!(
+                "OMP provider '{id}' already exists in database as provider_key '{provider_key}', skipping"
+            );
             continue;
         }
 
@@ -1553,6 +1573,7 @@ pub fn import_omp_providers_from_live(state: &AppState) -> Result<usize, AppErro
         }
 
         imported += 1;
+        existing_provider_keys.insert(provider_key);
         log::info!("Imported OMP provider '{id}' from live config");
     }
 
