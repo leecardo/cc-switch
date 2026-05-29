@@ -109,12 +109,15 @@ export function AddProviderDialog({
         ...(values.meta ? { meta: values.meta } : {}),
       };
 
-      // OpenCode/OpenClaw: pass providerKey for ID generation
+      // OpenCode/OpenClaw/Hermes: pass providerKey for ID generation
+      // OMP: use provider name as providerKey (matches models.yml key)
       if (
         (appId === "opencode" || appId === "openclaw" || appId === "hermes") &&
         values.providerKey
       ) {
         providerData.providerKey = values.providerKey;
+      } else if (appId === "omp" && values.name?.trim()) {
+        providerData.providerKey = values.name.trim();
       }
 
       const hasCustomEndpoints =

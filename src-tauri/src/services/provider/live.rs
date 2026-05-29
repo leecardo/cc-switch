@@ -852,8 +852,17 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
             log::debug!("Hermes provider '{}' written to live config", provider.id);
         }
         AppType::Omp => {
-            crate::omp_config::set_provider(&provider.id, provider.settings_config.clone())?;
-            log::debug!("OMP provider '{}' written to live config", provider.id);
+            // Use provider_key from settings_config if available, fall back to provider.id.
+            // This ensures models.yml keys match what the user entered in the UI
+            // rather than using the internal UUID.
+            let omp_key = provider
+                .settings_config
+                .as_object()
+                .and_then(|obj| obj.get("provider_key"))
+                .and_then(|v| v.as_str())
+                .unwrap_or(&provider.id);
+            crate::omp_config::set_provider(omp_key, provider.settings_config.clone())?;
+            log::debug!("OMP provider '{}' written to live config", omp_key);
         }
     }
     Ok(())

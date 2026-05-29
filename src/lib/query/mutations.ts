@@ -23,19 +23,26 @@ export const useAddProviderMutation = (appId: AppId) => {
     ) => {
       let id: string;
 
-      if (appId === "opencode" || appId === "openclaw" || appId === "hermes") {
-        if (
-          providerInput.category === "omo" ||
-          providerInput.category === "omo-slim"
-        ) {
-          const prefix = providerInput.category === "omo" ? "omo" : "omo-slim";
-          id = `${prefix}-${generateUUID()}`;
-        } else {
-          if (!providerInput.providerKey) {
-            throw new Error(`Provider key is required for ${appId}`);
-          }
-          id = providerInput.providerKey;
-        }
+      if (
+        appId === "opencode" ||
+        appId === "openclaw" ||
+        appId === "hermes" ||
+        appId === "omp"
+      ) {
+         if (
+           providerInput.category === "omo" ||
+           providerInput.category === "omo-slim"
+         ) {
+           const prefix = providerInput.category === "omo" ? "omo" : "omo-slim";
+           id = `${prefix}-${generateUUID()}`;
+         } else if (providerInput.providerKey) {
+           id = providerInput.providerKey;
+         } else if (appId === "omp") {
+           // OMP falls back to UUID if no providerKey is provided
+           id = generateUUID();
+         } else {
+           throw new Error(`Provider key is required for ${appId}`);
+         }
       } else {
         id = generateUUID();
       }
