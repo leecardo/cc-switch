@@ -31,9 +31,6 @@ pub fn get_omp_mcp_path() -> PathBuf {
     get_omp_dir().join("mcp.json")
 }
 
-pub fn get_omp_agents_path() -> PathBuf {
-    get_omp_dir().join("AGENTS.md")
-}
 
 fn omp_write_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
