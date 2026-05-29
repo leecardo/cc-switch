@@ -36,7 +36,9 @@ mod store;
 mod tray;
 mod usage_script;
 
-pub use app_config::{AppType, CommonConfigSnippets, InstalledSkill, McpApps, McpServer, MultiAppConfig, SkillApps};
+pub use app_config::{
+    AppType, CommonConfigSnippets, InstalledSkill, McpApps, McpServer, MultiAppConfig, SkillApps,
+};
 pub use codex_config::{get_codex_auth_path, get_codex_config_path, write_codex_live_atomic};
 pub use commands::open_provider_terminal;
 pub use commands::*;
@@ -45,10 +47,18 @@ pub use database::Database;
 pub use deeplink::{import_provider_from_deeplink, parse_deeplink_url, DeepLinkImportRequest};
 pub use error::AppError;
 pub use mcp::{
-    import_from_claude, import_from_codex, import_from_gemini, remove_server_from_claude,
-    remove_server_from_codex, remove_server_from_gemini, sync_enabled_to_claude,
-    sync_enabled_to_codex, sync_enabled_to_gemini, sync_single_server_to_claude,
-    sync_single_server_to_codex, sync_single_server_to_gemini,
+    import_from_claude, import_from_codex, import_from_gemini, import_from_omp,
+    remove_server_from_claude, remove_server_from_codex, remove_server_from_gemini,
+    remove_server_from_omp, sync_enabled_to_claude, sync_enabled_to_codex, sync_enabled_to_gemini,
+    sync_single_server_to_claude, sync_single_server_to_codex, sync_single_server_to_gemini,
+    sync_single_server_to_omp,
+};
+pub use omp_config::{
+    apply_switch_defaults as apply_omp_switch_defaults, get_omp_config_path, get_omp_mcp_path,
+    get_omp_models_path, get_providers as get_omp_providers,
+    remove_provider_references_from_config as remove_omp_provider_references_from_config,
+    rename_provider_references_in_config as rename_omp_provider_references_in_config,
+    set_provider as set_omp_provider,
 };
 pub use provider::{Provider, ProviderMeta};
 pub use services::{
@@ -62,6 +72,19 @@ use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
 use std::sync::Arc;
+
+pub fn first_launch_prompt_import_apps() -> [AppType; 7] {
+    [
+        AppType::Claude,
+        AppType::Codex,
+        AppType::Gemini,
+        AppType::OpenCode,
+        AppType::OpenClaw,
+        AppType::Hermes,
+        AppType::Omp,
+    ]
+}
+
 #[cfg(target_os = "macos")]
 use tauri::image::Image;
 use tauri::tray::{TrayIconBuilder, TrayIconEvent};
@@ -731,14 +754,7 @@ pub fn run() {
             if app_state.db.is_prompts_table_empty().unwrap_or(false) {
                 log::info!("Prompts table empty, importing from live configurations...");
 
-                for app in [
-                    crate::app_config::AppType::Claude,
-                    crate::app_config::AppType::Codex,
-                    crate::app_config::AppType::Gemini,
-                    crate::app_config::AppType::OpenCode,
-                    crate::app_config::AppType::OpenClaw,
-                    crate::app_config::AppType::Hermes,
-                ] {
+                for app in first_launch_prompt_import_apps() {
                     match crate::services::prompt::PromptService::import_from_file_on_first_launch(
                         &app_state,
                         app.clone(),

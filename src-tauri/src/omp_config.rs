@@ -31,7 +31,6 @@ pub fn get_omp_mcp_path() -> PathBuf {
     get_omp_dir().join("mcp.json")
 }
 
-
 fn omp_write_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(()))
@@ -42,11 +41,13 @@ fn omp_write_lock() -> &'static Mutex<()> {
 // ============================================================================
 
 pub(crate) fn yaml_to_json(yaml: &serde_yaml::Value) -> Result<serde_json::Value, AppError> {
-    serde_json::to_value(yaml).map_err(|e| AppError::Config(format!("YAML to JSON conversion failed: {e}")))
+    serde_json::to_value(yaml)
+        .map_err(|e| AppError::Config(format!("YAML to JSON conversion failed: {e}")))
 }
 
 pub(crate) fn json_to_yaml(json: &serde_json::Value) -> Result<serde_yaml::Value, AppError> {
-    serde_yaml::to_value(json).map_err(|e| AppError::Config(format!("JSON to YAML conversion failed: {e}")))
+    serde_yaml::to_value(json)
+        .map_err(|e| AppError::Config(format!("JSON to YAML conversion failed: {e}")))
 }
 
 // ============================================================================
@@ -60,7 +61,8 @@ pub fn read_models_yaml() -> Result<serde_yaml::Value, AppError> {
         return Ok(serde_yaml::Value::Mapping(serde_yaml::Mapping::new()));
     }
     let content = std::fs::read_to_string(&path).map_err(|e| AppError::io(&path, e))?;
-    serde_yaml::from_str(&content).map_err(|e| AppError::Config(format!("Failed to parse models.yml: {e}")))
+    serde_yaml::from_str(&content)
+        .map_err(|e| AppError::Config(format!("Failed to parse models.yml: {e}")))
 }
 
 /// Write the entire models.yml file atomically.
@@ -119,12 +121,29 @@ pub fn set_provider(id: &str, config: serde_json::Value) -> Result<(), AppError>
     let _guard = omp_write_lock().lock()?;
     let mut yaml = read_models_yaml()?;
 
+    if !yaml.is_mapping() {
+        return Err(AppError::Config(
+            "models.yml must be a YAML mapping".to_string(),
+        ));
+    }
+
     // Ensure providers mapping exists
-    if yaml.get("providers").is_none() {
-        yaml.as_mapping_mut().unwrap().insert(
-            serde_yaml::Value::String("providers".to_string()),
+    let providers_key = serde_yaml::Value::String("providers".to_string());
+    if yaml.get(&providers_key).is_none() {
+        yaml.as_mapping_mut().expect("validated mapping").insert(
+            providers_key.clone(),
             serde_yaml::Value::Mapping(serde_yaml::Mapping::new()),
         );
+    }
+
+    if !yaml
+        .get(&providers_key)
+        .map(|value| value.is_mapping())
+        .unwrap_or(false)
+    {
+        return Err(AppError::Config(
+            "models.yml providers must be a YAML mapping".to_string(),
+        ));
     }
 
     // Strip UI-only markers before writing to YAML
@@ -137,10 +156,7 @@ pub fn set_provider(id: &str, config: serde_json::Value) -> Result<(), AppError>
     let yaml_val = json_to_yaml(&config)?;
 
     if let Some(providers) = yaml.get_mut("providers").and_then(|v| v.as_mapping_mut()) {
-        providers.insert(
-            serde_yaml::Value::String(id.to_string()),
-            yaml_val,
-        );
+        providers.insert(serde_yaml::Value::String(id.to_string()), yaml_val);
     }
 
     write_models_yaml(&yaml)
@@ -169,14 +185,15 @@ pub fn read_config_yaml() -> Result<serde_yaml::Value, AppError> {
         return Ok(serde_yaml::Value::Mapping(serde_yaml::Mapping::new()));
     }
     let content = std::fs::read_to_string(&path).map_err(|e| AppError::io(&path, e))?;
-    serde_yaml::from_str(&content).map_err(|e| AppError::Config(format!("Failed to parse config.yml: {e}")))
+    serde_yaml::from_str(&content)
+        .map_err(|e| AppError::Config(format!("Failed to parse config.yml: {e}")))
 }
 
 /// Write config.yml atomically, preserving unrelated sections.
 ///
 /// Only replaces the top-level key matching `section_key` if it exists in `new_yaml`.
 /// If `section_key` doesn't exist in the file, it's appended.
-fn write_config_section(
+fn write_config_section_locked(
     section_key: &str,
     section_value: &serde_yaml::Value,
 ) -> Result<(), AppError> {
@@ -215,6 +232,13 @@ pub fn apply_switch_defaults(
     provider_id: &str,
     provider_config: &serde_json::Value,
 ) -> Result<(), AppError> {
+    let selector_provider_id = provider_config
+        .get("provider_key")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(provider_id);
+
     // Determine the default model selector
     let model_id = provider_config
         .get("models")
@@ -232,14 +256,16 @@ pub fn apply_switch_defaults(
         });
 
     let selector = match model_id {
-        Some(id) => format!("{provider_id}/{id}"),
+        Some(id) => format!("{selector_provider_id}/{id}"),
         None => {
             log::warn!(
-                "OMP provider '{provider_id}' has no models, skipping modelRoles.default update"
+                "OMP provider '{selector_provider_id}' has no models, skipping modelRoles.default update"
             );
             return Ok(());
         }
     };
+
+    let _guard = omp_write_lock().lock()?;
 
     // Read existing modelRoles or create new
     let config = read_config_yaml()?;
@@ -258,7 +284,80 @@ pub fn apply_switch_defaults(
         serde_yaml::Value::String(selector),
     );
 
-    write_config_section("modelRoles", &serde_yaml::Value::Mapping(roles_mapping))
+    write_config_section_locked("modelRoles", &serde_yaml::Value::Mapping(roles_mapping))
+}
+
+pub fn remove_provider_references_from_config(provider_id: &str) -> Result<(), AppError> {
+    let provider_id = provider_id.trim();
+    if provider_id.is_empty() {
+        return Ok(());
+    }
+
+    let _guard = omp_write_lock().lock()?;
+    let mut yaml = read_config_yaml()?;
+    let Some(roles) = yaml
+        .get_mut("modelRoles")
+        .and_then(|value| value.as_mapping_mut())
+    else {
+        return Ok(());
+    };
+
+    let prefix = format!("{provider_id}/");
+    roles.retain(|_, value| {
+        !value
+            .as_str()
+            .map(|role_value| role_value.starts_with(&prefix))
+            .unwrap_or(false)
+    });
+
+    let content = serde_yaml::to_string(&yaml)
+        .map_err(|e| AppError::Config(format!("Failed to serialize config.yml: {e}")))?;
+    let path = get_omp_config_path();
+    crate::config::atomic_write(&path, content.as_bytes())
+}
+
+pub fn rename_provider_references_in_config(
+    old_provider_id: &str,
+    new_provider_id: &str,
+) -> Result<(), AppError> {
+    let old_provider_id = old_provider_id.trim();
+    let new_provider_id = new_provider_id.trim();
+    if old_provider_id.is_empty()
+        || new_provider_id.is_empty()
+        || old_provider_id == new_provider_id
+    {
+        return Ok(());
+    }
+
+    let _guard = omp_write_lock().lock()?;
+    let mut yaml = read_config_yaml()?;
+    let Some(roles) = yaml
+        .get_mut("modelRoles")
+        .and_then(|value| value.as_mapping_mut())
+    else {
+        return Ok(());
+    };
+
+    let old_prefix = format!("{old_provider_id}/");
+    let mut changed = false;
+    for value in roles.values_mut() {
+        let Some(role_value) = value.as_str() else {
+            continue;
+        };
+        if let Some(model_suffix) = role_value.strip_prefix(&old_prefix) {
+            *value = serde_yaml::Value::String(format!("{new_provider_id}/{model_suffix}"));
+            changed = true;
+        }
+    }
+
+    if !changed {
+        return Ok(());
+    }
+
+    let content = serde_yaml::to_string(&yaml)
+        .map_err(|e| AppError::Config(format!("Failed to serialize config.yml: {e}")))?;
+    let path = get_omp_config_path();
+    crate::config::atomic_write(&path, content.as_bytes())
 }
 
 // ============================================================================
@@ -296,10 +395,7 @@ pub fn update_config(json: serde_json::Value) -> Result<(), AppError> {
     for key in &allowed_keys {
         if let Some(value) = updates.get(*key) {
             let yaml_value = json_to_yaml(value)?;
-            mapping.insert(
-                serde_yaml::Value::String(key.to_string()),
-                yaml_value,
-            );
+            mapping.insert(serde_yaml::Value::String(key.to_string()), yaml_value);
         }
     }
 

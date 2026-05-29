@@ -74,7 +74,45 @@ function buildModelValue(model: string, thinking: string): string {
   return `${model}:${thinking}`;
 }
 
-export function OmpConfigPanel({ providers }: { providers?: Record<string, unknown> }) {
+function OmpRoleKeyInput({
+  roleKey,
+  onRename,
+}: {
+  roleKey: string;
+  onRename: (oldKey: string, newKey: string) => void;
+}) {
+  const [draft, setDraft] = useState(roleKey);
+
+  useEffect(() => {
+    setDraft(roleKey);
+  }, [roleKey]);
+
+  const commitRename = useCallback(() => {
+    onRename(roleKey, draft);
+  }, [draft, onRename, roleKey]);
+
+  return (
+    <Input
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commitRename}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          commitRename();
+          e.currentTarget.blur();
+        }
+      }}
+      className="w-28 font-mono text-sm shrink-0"
+      title={getRoleLabel(roleKey)}
+    />
+  );
+}
+
+export function OmpConfigPanel({
+  providers,
+}: {
+  providers?: Record<string, unknown>;
+}) {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -131,26 +169,39 @@ export function OmpConfigPanel({ providers }: { providers?: Record<string, unkno
     });
   }, []);
 
-  const renameModelRole = useCallback((oldKey: string, newKey: string) => {
-    if (!newKey.trim() || oldKey === newKey) return;
-    setConfig((prev) => {
-      const roles = { ...prev.modelRoles };
-      const value = roles[oldKey];
-      delete roles[oldKey];
-      roles[newKey] = value;
-      return { ...prev, modelRoles: roles };
-    });
-  }, []);
+  const normalizeRoleKey = useCallback(
+    (key: string) => key.trim().toLowerCase().replace(/\s+/g, "-"),
+    [],
+  );
+
+  const renameModelRole = useCallback(
+    (oldKey: string, rawNewKey: string) => {
+      const newKey = normalizeRoleKey(rawNewKey);
+      if (!newKey || oldKey === newKey) return;
+
+      setConfig((prev) => {
+        const roles = { ...prev.modelRoles };
+        if (roles[newKey] !== undefined) {
+          return prev;
+        }
+        const value = roles[oldKey];
+        delete roles[oldKey];
+        roles[newKey] = value;
+        return { ...prev, modelRoles: roles };
+      });
+    },
+    [normalizeRoleKey],
+  );
 
   const addModelRole = useCallback(() => {
-    const key = newRoleKey.trim().toLowerCase().replace(/\s+/g, "-");
+    const key = normalizeRoleKey(newRoleKey);
     if (!key || config.modelRoles?.[key] !== undefined) return;
     setConfig((prev) => ({
       ...prev,
       modelRoles: { ...prev.modelRoles, [key]: "" },
     }));
     setNewRoleKey("");
-  }, [newRoleKey, config.modelRoles]);
+  }, [newRoleKey, config.modelRoles, normalizeRoleKey]);
 
   const roleEntries = Object.entries(config.modelRoles ?? {});
 
@@ -194,12 +245,7 @@ export function OmpConfigPanel({ providers }: { providers?: Record<string, unkno
             return (
               <div key={key} className="flex items-center gap-2">
                 {/* Role key (editable) */}
-                <Input
-                  value={key}
-                  onChange={(e) => renameModelRole(key, e.target.value)}
-                  className="w-28 font-mono text-sm shrink-0"
-                  title={getRoleLabel(key)}
-                />
+                <OmpRoleKeyInput roleKey={key} onRename={renameModelRole} />
                 {/* Model selector */}
                 <Select
                   value={model}

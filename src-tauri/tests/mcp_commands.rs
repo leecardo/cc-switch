@@ -228,6 +228,7 @@ command = "echo"
                 gemini: false,
                 opencode: false,
                 hermes: false,
+                omp: false,
             },
             description: None,
             homepage: None,
@@ -322,6 +323,7 @@ fn set_mcp_enabled_for_codex_writes_live_config() {
                 gemini: false,
                 opencode: false,
                 hermes: false,
+                omp: false,
             },
             description: None,
             homepage: None,
@@ -387,6 +389,7 @@ fn enabling_codex_mcp_skips_when_codex_dir_missing() {
                 gemini: false,
                 opencode: false,
                 hermes: false,
+                omp: false,
             },
             description: None,
             homepage: None,
@@ -432,6 +435,7 @@ fn upsert_mcp_server_disabling_app_removes_from_claude_live_config() {
                 gemini: false,
                 opencode: false,
                 hermes: false,
+                omp: false,
             },
             description: None,
             homepage: None,
@@ -466,6 +470,7 @@ fn upsert_mcp_server_disabling_app_removes_from_claude_live_config() {
                 gemini: false,
                 opencode: false,
                 hermes: false,
+                omp: false,
             },
             description: None,
             homepage: None,
@@ -599,6 +604,7 @@ fn enabling_gemini_mcp_skips_when_gemini_dir_missing() {
                 gemini: false,
                 opencode: false,
                 hermes: false,
+                omp: false,
             },
             description: None,
             homepage: None,
@@ -654,6 +660,7 @@ fn enabling_claude_mcp_skips_when_claude_config_absent() {
                 gemini: false,
                 opencode: false,
                 hermes: false,
+                omp: false,
             },
             description: None,
             homepage: None,
@@ -715,6 +722,7 @@ fn sync_all_enabled_removes_known_disabled_but_preserves_unknown_live_entries() 
                 gemini: false,
                 opencode: false,
                 hermes: false,
+                omp: false,
             },
             description: None,
             homepage: None,
@@ -737,6 +745,7 @@ fn sync_all_enabled_removes_known_disabled_but_preserves_unknown_live_entries() 
                 gemini: false,
                 opencode: false,
                 hermes: false,
+                omp: false,
             },
             description: None,
             homepage: None,
@@ -765,5 +774,184 @@ fn sync_all_enabled_removes_known_disabled_but_preserves_unknown_live_entries() 
     assert!(
         servers.contains_key("external-only"),
         "live entries unknown to DB should be preserved"
+    );
+}
+
+#[test]
+fn import_mcp_from_omp_skips_disabled_servers() {
+    let _guard = test_mutex().lock().expect("acquire test mutex");
+    reset_test_fs();
+    let home = ensure_test_home();
+
+    let omp_dir = home.join(".omp").join("agent");
+    fs::create_dir_all(&omp_dir).expect("create omp dir");
+    fs::write(
+        cc_switch_lib::get_omp_mcp_path(),
+        serde_json::to_string_pretty(&json!({
+            "mcpServers": {
+                "enabled-server": {
+                    "type": "stdio",
+                    "command": "enabled"
+                },
+                "disabled-server": {
+                    "type": "stdio",
+                    "command": "disabled"
+                }
+            },
+            "disabledServers": ["disabled-server"]
+        }))
+        .expect("serialize omp mcp"),
+    )
+    .expect("seed omp mcp");
+
+    let mut config = MultiAppConfig::default();
+    let changed = cc_switch_lib::import_from_omp(&mut config).expect("import omp mcp");
+    let servers = config.mcp.servers.expect("servers should be initialized");
+
+    assert_eq!(changed, 1);
+    assert!(servers.contains_key("enabled-server"));
+    assert!(
+        !servers.contains_key("disabled-server"),
+        "disabled OMP servers must not be imported as enabled"
+    );
+}
+
+#[test]
+fn upsert_mcp_server_disabling_omp_removes_from_omp_live_config() {
+    let _guard = test_mutex().lock().expect("acquire test mutex");
+    reset_test_fs();
+    let home = ensure_test_home();
+
+    fs::create_dir_all(home.join(".omp").join("agent")).expect("create omp dir");
+
+    let state = create_test_state().expect("create test state");
+    McpService::upsert_server(
+        &state,
+        McpServer {
+            id: "echo".to_string(),
+            name: "echo".to_string(),
+            server: json!({
+                "type": "stdio",
+                "command": "echo"
+            }),
+            apps: McpApps {
+                claude: false,
+                codex: false,
+                gemini: false,
+                opencode: false,
+                hermes: false,
+                omp: true,
+            },
+            description: None,
+            homepage: None,
+            docs: None,
+            tags: Vec::new(),
+        },
+    )
+    .expect("upsert should sync to OMP live config");
+
+    let mcp_path = cc_switch_lib::get_omp_mcp_path();
+    let text = fs::read_to_string(&mcp_path).expect("read OMP mcp.json");
+    let value: serde_json::Value = serde_json::from_str(&text).expect("parse OMP mcp.json");
+    assert!(value.pointer("/mcpServers/echo").is_some());
+
+    McpService::upsert_server(
+        &state,
+        McpServer {
+            id: "echo".to_string(),
+            name: "echo".to_string(),
+            server: json!({
+                "type": "stdio",
+                "command": "echo"
+            }),
+            apps: McpApps {
+                claude: false,
+                codex: false,
+                gemini: false,
+                opencode: false,
+                hermes: false,
+                omp: false,
+            },
+            description: None,
+            homepage: None,
+            docs: None,
+            tags: Vec::new(),
+        },
+    )
+    .expect("upsert disabling OMP should remove from live config");
+
+    let text = fs::read_to_string(&mcp_path).expect("read OMP mcp.json after disable");
+    let value: serde_json::Value = serde_json::from_str(&text).expect("parse OMP mcp.json");
+    assert!(
+        value.pointer("/mcpServers/echo").is_none(),
+        "echo should be removed from OMP mcp.json after disabling OMP"
+    );
+}
+
+#[test]
+fn omp_provider_reference_helpers_update_config_roles() {
+    let _guard = test_mutex().lock().expect("acquire test mutex");
+    reset_test_fs();
+    let home = ensure_test_home();
+
+    fs::create_dir_all(home.join(".omp").join("agent")).expect("create omp dir");
+    fs::write(
+        cc_switch_lib::get_omp_config_path(),
+        r#"modelRoles:
+  default: old/model-a
+  slow: old/model-b:high
+  vision: other/model-c
+defaultThinkingLevel: xhigh
+"#,
+    )
+    .expect("seed config.yml");
+
+    cc_switch_lib::rename_omp_provider_references_in_config("old", "new")
+        .expect("rename OMP provider references");
+    let text = fs::read_to_string(cc_switch_lib::get_omp_config_path()).expect("read config.yml");
+    assert!(text.contains("default: new/model-a"));
+    assert!(text.contains("slow: new/model-b:high"));
+    assert!(text.contains("vision: other/model-c"));
+    assert!(text.contains("defaultThinkingLevel: xhigh"));
+
+    cc_switch_lib::remove_omp_provider_references_from_config("new")
+        .expect("remove OMP provider references");
+    let text = fs::read_to_string(cc_switch_lib::get_omp_config_path()).expect("read config.yml");
+    assert!(!text.contains("new/model-a"));
+    assert!(!text.contains("new/model-b"));
+    assert!(text.contains("vision: other/model-c"));
+    assert!(text.contains("defaultThinkingLevel: xhigh"));
+}
+
+#[test]
+fn omp_switch_defaults_use_provider_key_and_models_yml_shape_errors_do_not_panic() {
+    let _guard = test_mutex().lock().expect("acquire test mutex");
+    reset_test_fs();
+    let home = ensure_test_home();
+
+    fs::create_dir_all(home.join(".omp").join("agent")).expect("create omp dir");
+
+    cc_switch_lib::apply_omp_switch_defaults(
+        "internal-id",
+        &json!({
+            "provider_key": "live-key",
+            "models": [{ "id": "model-a" }]
+        }),
+    )
+    .expect("apply OMP defaults");
+    let text = fs::read_to_string(cc_switch_lib::get_omp_config_path()).expect("read config.yml");
+    assert!(
+        text.contains("default: live-key/model-a"),
+        "modelRoles.default should use provider_key instead of internal DB id"
+    );
+
+    fs::write(cc_switch_lib::get_omp_models_path(), "- invalid\n- shape\n")
+        .expect("seed invalid models.yml shape");
+    let err = cc_switch_lib::set_omp_provider("demo", json!({ "models": [] }))
+        .expect_err("non-mapping models.yml should return an error");
+    assert!(
+        err.to_string()
+            .contains("models.yml must be a YAML mapping"),
+        "unexpected error: {err}"
     );
 }

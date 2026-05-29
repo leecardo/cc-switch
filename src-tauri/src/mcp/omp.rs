@@ -19,7 +19,7 @@
 //! ```
 
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::app_config::MultiAppConfig;
 use crate::error::AppError;
@@ -81,7 +81,11 @@ pub fn sync_single_server_to_omp(
         return Ok(());
     }
 
-    let spec = extract_server_spec(spec)?;
+    let spec = if spec.get("server").is_some() {
+        extract_server_spec(spec)?
+    } else {
+        spec.clone()
+    };
     validate_server_spec(&spec)?;
 
     let mut root = ensure_mcp_json()?;
@@ -99,7 +103,10 @@ pub fn sync_single_server_to_omp(
     servers.insert(id.to_string(), spec);
 
     // Remove from disabledServers if present
-    if let Some(disabled) = root.get_mut("disabledServers").and_then(|v| v.as_array_mut()) {
+    if let Some(disabled) = root
+        .get_mut("disabledServers")
+        .and_then(|v| v.as_array_mut())
+    {
         disabled.retain(|v| v.as_str() != Some(id));
     }
 
@@ -122,7 +129,10 @@ pub fn remove_server_from_omp(id: &str) -> Result<(), AppError> {
     }
 
     // Remove from disabledServers
-    if let Some(disabled) = root.get_mut("disabledServers").and_then(|v| v.as_array_mut()) {
+    if let Some(disabled) = root
+        .get_mut("disabledServers")
+        .and_then(|v| v.as_array_mut())
+    {
         disabled.retain(|v| v.as_str() != Some(id));
     }
 
@@ -148,7 +158,18 @@ pub fn import_from_omp(config: &mut MultiAppConfig) -> Result<usize, AppError> {
     let mut changed = 0;
     let mut errors = Vec::new();
 
+    let disabled_servers: HashSet<&str> = root
+        .get("disabledServers")
+        .and_then(|v| v.as_array())
+        .map(|items| items.iter().filter_map(|item| item.as_str()).collect())
+        .unwrap_or_default();
+
     for (id, spec) in servers_map.iter() {
+        if disabled_servers.contains(id.as_str()) {
+            log::debug!("Skipping disabled OMP MCP server '{id}' during import");
+            continue;
+        }
+
         if let Err(e) = validate_server_spec(spec) {
             log::warn!("Skipping invalid OMP MCP server '{id}': {e}");
             errors.push(format!("{id}: {e}"));

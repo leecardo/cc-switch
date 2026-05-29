@@ -706,6 +706,122 @@ base_url = "http://localhost:8080"
         });
     }
 
+    fn omp_provider(id: &str, live_key: &str) -> Provider {
+        let mut provider = Provider::with_id(
+            id.to_string(),
+            format!("Provider {id}"),
+            json!({
+                "provider_key": live_key,
+                "name": format!("Provider {id}"),
+                "api": "openai-completions",
+                "baseUrl": "https://api.example.com/v1",
+                "apiKey": "test-key",
+                "models": [{ "id": "model-a", "name": "Model A" }]
+            }),
+            None,
+        );
+        provider.meta = Some(ProviderMeta {
+            live_config_managed: Some(true),
+            ..Default::default()
+        });
+        provider
+    }
+
+    #[test]
+    #[serial]
+    fn omp_delete_uses_provider_key_for_live_config_and_model_roles() {
+        with_test_home(|state, home| {
+            let provider = omp_provider("internal-id", "live-key");
+            state
+                .db
+                .save_provider(AppType::Omp.as_str(), &provider)
+                .expect("seed OMP provider");
+
+            let omp_dir = home.join(".omp").join("agent");
+            fs::create_dir_all(&omp_dir).expect("create omp dir");
+            fs::write(
+                crate::omp_config::get_omp_models_path(),
+                r#"providers:
+  live-key:
+    name: Live Key
+    models:
+      - id: model-a
+"#,
+            )
+            .expect("seed models.yml");
+            fs::write(
+                crate::omp_config::get_omp_config_path(),
+                r#"modelRoles:
+  default: live-key/model-a
+  reviewer: other/model-b
+"#,
+            )
+            .expect("seed config.yml");
+
+            ProviderService::delete(state, AppType::Omp, "internal-id")
+                .expect("delete OMP provider");
+
+            let providers = crate::omp_config::get_providers().expect("read OMP providers");
+            assert!(
+                !providers.contains_key("live-key"),
+                "delete must remove the live provider_key entry, not the DB id"
+            );
+            let config_text = fs::read_to_string(crate::omp_config::get_omp_config_path())
+                .expect("read config.yml");
+            assert!(!config_text.contains("live-key/model-a"));
+            assert!(config_text.contains("reviewer: other/model-b"));
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn omp_update_provider_key_renames_existing_live_model_roles() {
+        with_test_home(|state, home| {
+            let provider = omp_provider("internal-id", "old-live");
+            state
+                .db
+                .save_provider(AppType::Omp.as_str(), &provider)
+                .expect("seed OMP provider");
+
+            let omp_dir = home.join(".omp").join("agent");
+            fs::create_dir_all(&omp_dir).expect("create omp dir");
+            fs::write(
+                crate::omp_config::get_omp_models_path(),
+                r#"providers:
+  old-live:
+    name: Old Live
+    models:
+      - id: model-a
+"#,
+            )
+            .expect("seed models.yml");
+            fs::write(
+                crate::omp_config::get_omp_config_path(),
+                r#"modelRoles:
+  default: old-live/model-a
+  reviewer: old-live/model-b:high
+"#,
+            )
+            .expect("seed config.yml");
+
+            let mut updated = provider.clone();
+            updated.settings_config["provider_key"] = json!("new-live");
+            updated.settings_config["models"] = json!([{ "id": "model-a", "name": "Model A" }]);
+
+            ProviderService::update(state, AppType::Omp, None, updated)
+                .expect("update OMP provider");
+
+            let providers = crate::omp_config::get_providers().expect("read OMP providers");
+            assert!(!providers.contains_key("old-live"));
+            assert!(providers.contains_key("new-live"));
+            let config_text = fs::read_to_string(crate::omp_config::get_omp_config_path())
+                .expect("read config.yml");
+            assert!(config_text.contains("default: new-live/model-a"));
+            assert!(config_text.contains("reviewer: new-live/model-b:high"));
+            assert!(!config_text.contains("old-live/"));
+        });
+    }
+
     #[test]
     #[serial]
     fn sync_current_provider_for_app_skips_db_only_opencode_provider() {
@@ -1153,6 +1269,16 @@ impl ProviderService {
             .live_config_managed = Some(managed);
     }
 
+    fn omp_live_provider_key<'a>(provider: &'a Provider, fallback: &'a str) -> &'a str {
+        provider
+            .settings_config
+            .as_object()
+            .and_then(|obj| obj.get("provider_key"))
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(fallback)
+    }
     /// List all providers for an app type
     pub fn list(
         state: &AppState,
@@ -1352,9 +1478,20 @@ impl ProviderService {
                 }
                 return Ok(true);
             }
+            let live_lookup_id = existing_provider
+                .as_ref()
+                .filter(|_| matches!(app_type, AppType::Omp))
+                .map(|provider| Self::omp_live_provider_key(provider, &provider.id))
+                .unwrap_or_else(|| {
+                    if matches!(app_type, AppType::Omp) {
+                        Self::omp_live_provider_key(&provider, &provider.id)
+                    } else {
+                        provider.id.as_str()
+                    }
+                });
             let live_config_managed = Self::check_live_config_exists(
                 &app_type,
-                &provider.id,
+                live_lookup_id,
                 Self::provider_live_config_managed(&provider).or_else(|| {
                     existing_provider
                         .as_ref()
@@ -1374,23 +1511,26 @@ impl ProviderService {
             if matches!(app_type, AppType::Omp) {
                 let old_key = existing_provider
                     .as_ref()
-                    .and_then(|p| {
-                        p.settings_config
-                            .as_object()
-                            .and_then(|obj| obj.get("provider_key"))
-                            .and_then(|v| v.as_str())
-                            .map(String::from)
-                    })
-                    .unwrap_or_else(|| original_id.clone());
-                let new_key = provider
-                    .settings_config
-                    .as_object()
-                    .and_then(|obj| obj.get("provider_key"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or(&provider.id);
+                    .map(|provider| Self::omp_live_provider_key(provider, &original_id))
+                    .unwrap_or(original_id.as_str());
+                let new_key = Self::omp_live_provider_key(&provider, &provider.id);
                 if old_key != new_key {
-                    if let Err(e) = crate::omp_config::remove_provider(&old_key) {
-                        log::warn!("Failed to remove old OMP provider '{}' from models.yml: {}", old_key, e);
+                    if let Err(e) = crate::omp_config::remove_provider(old_key) {
+                        log::warn!(
+                            "Failed to remove old OMP provider '{}' from models.yml: {}",
+                            old_key,
+                            e
+                        );
+                    }
+                    if let Err(e) =
+                        crate::omp_config::rename_provider_references_in_config(old_key, new_key)
+                    {
+                        log::warn!(
+                            "Failed to update OMP modelRoles references from '{}' to '{}': {}",
+                            old_key,
+                            new_key,
+                            e
+                        );
                     }
                 }
             }
@@ -1481,7 +1621,7 @@ impl ProviderService {
                 }
             }
 
-            // Non-OMO path for both OpenCode and OpenClaw:
+            // Non-OMO path for OpenCode/OpenClaw/Hermes/OMP:
             // remove from live first (atomicity), then DB.
             //
             // Use check_live_config_exists rather than trusting the flag alone: the flag
@@ -1491,12 +1631,20 @@ impl ProviderService {
             let live_managed = existing
                 .as_ref()
                 .and_then(Self::provider_live_config_managed);
-            if Self::check_live_config_exists(&app_type, id, live_managed)? {
+            let live_id = existing
+                .as_ref()
+                .filter(|_| matches!(app_type, AppType::Omp))
+                .map(|provider| Self::omp_live_provider_key(provider, id))
+                .unwrap_or(id);
+            if Self::check_live_config_exists(&app_type, live_id, live_managed)? {
                 match app_type {
                     AppType::OpenCode => remove_opencode_provider_from_live(id)?,
                     AppType::OpenClaw => remove_openclaw_provider_from_live(id)?,
                     AppType::Hermes => remove_hermes_provider_from_live(id)?,
-                    AppType::Omp => crate::omp_config::remove_provider(id)?,
+                    AppType::Omp => {
+                        crate::omp_config::remove_provider(live_id)?;
+                        crate::omp_config::remove_provider_references_from_config(live_id)?;
+                    }
                     _ => {}
                 }
             }
@@ -1563,14 +1711,21 @@ impl ProviderService {
                 remove_hermes_provider_from_live(id)?;
             }
             AppType::Omp => {
-                crate::omp_config::remove_provider(id)?;
+                let live_id = state
+                    .db
+                    .get_provider_by_id(id, app_type.as_str())?
+                    .as_ref()
+                    .map(|provider| Self::omp_live_provider_key(provider, id).to_string())
+                    .unwrap_or_else(|| id.to_string());
+                crate::omp_config::remove_provider(&live_id)?;
+                crate::omp_config::remove_provider_references_from_config(&live_id)?;
             }
             _ => {
                 return Err(AppError::Message(format!(
                     "App {} does not support remove from live config",
                     app_type.as_str()
                 )));
-             }
+            }
         }
 
         if let Some(mut provider) = state.db.get_provider_by_id(id, app_type.as_str())? {
@@ -1792,6 +1947,9 @@ impl ProviderService {
                     AppType::OpenCode => remove_opencode_provider_from_live(&provider.id),
                     AppType::OpenClaw => remove_openclaw_provider_from_live(&provider.id),
                     AppType::Hermes => remove_hermes_provider_from_live(&provider.id),
+                    AppType::Omp => crate::omp_config::remove_provider(
+                        Self::omp_live_provider_key(provider, &provider.id),
+                    ),
                     _ => Ok(()),
                 };
 
@@ -1975,7 +2133,7 @@ impl ProviderService {
             AppType::OpenCode => Self::extract_opencode_common_config(&provider.settings_config),
             AppType::OpenClaw => Self::extract_openclaw_common_config(&provider.settings_config),
             AppType::Hermes => Ok(String::new()), // Hermes doesn't use common config snippets
-            AppType::Omp => Ok(String::new()), // OMP doesn't use common config snippets
+            AppType::Omp => Ok(String::new()),    // OMP doesn't use common config snippets
         }
     }
 
@@ -1992,7 +2150,7 @@ impl ProviderService {
             AppType::OpenCode => Self::extract_opencode_common_config(settings_config),
             AppType::OpenClaw => Self::extract_openclaw_common_config(settings_config),
             AppType::Hermes => Ok(String::new()), // Hermes doesn't use common config snippets
-            AppType::Omp => Ok(String::new()), // OMP doesn't use common config snippets
+            AppType::Omp => Ok(String::new()),    // OMP doesn't use common config snippets
         }
     }
 
