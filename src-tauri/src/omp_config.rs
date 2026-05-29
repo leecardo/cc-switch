@@ -263,3 +263,51 @@ pub fn apply_switch_defaults(
 
     write_config_section("modelRoles", &serde_yaml::Value::Mapping(roles_mapping))
 }
+
+// ============================================================================
+// config.yml - Full Read/Write for Settings UI
+// ============================================================================
+
+/// 读取 config.yml 并转为 JSON，供前端设置页使用。
+/// 文件不存在时返回空对象。
+pub fn get_config_json() -> Result<serde_json::Value, AppError> {
+    let yaml = read_config_yaml()?;
+    yaml_to_json(&yaml)
+}
+
+/// 从前端 JSON 更新 config.yml。
+///
+/// 策略：读取现有 YAML → 逐个合并前端传入的顶层 key → 写回。
+/// 只更新已知可编辑字段，保留 OMP 内部字段（如 lastChangelogVersion）不变。
+pub fn update_config(json: serde_json::Value) -> Result<(), AppError> {
+    let _guard = omp_write_lock().lock()?;
+    let mut yaml = read_config_yaml()?;
+
+    if !yaml.is_mapping() {
+        yaml = serde_yaml::Value::Mapping(serde_yaml::Mapping::new());
+    }
+
+    let updates = match json.as_object() {
+        Some(obj) => obj,
+        None => return Err(AppError::Config("config must be a JSON object".to_string())),
+    };
+
+    // 只合并允许编辑的顶层 key，防止前端误传覆盖 OMP 内部字段
+    let allowed_keys = ["modelRoles", "defaultThinkingLevel", "display"];
+    let mapping = yaml.as_mapping_mut().unwrap();
+
+    for key in &allowed_keys {
+        if let Some(value) = updates.get(*key) {
+            let yaml_value = json_to_yaml(value)?;
+            mapping.insert(
+                serde_yaml::Value::String(key.to_string()),
+                yaml_value,
+            );
+        }
+    }
+
+    let content = serde_yaml::to_string(&yaml)
+        .map_err(|e| AppError::Config(format!("Failed to serialize config.yml: {e}")))?;
+    let path = get_omp_config_path();
+    crate::config::atomic_write(&path, content.as_bytes())
+}

@@ -2689,5 +2689,30 @@
     "expiredHint": "Run the {{tool}} command to refresh your login",
     "queryFailed": "Query failed",
     "refresh": "Refresh"
+  },
+  "omp": {
+    "config": {
+      "title": "OMP Runtime Config",
+      "description": "Edit model roles and display settings in config.yml",
+      "save": "Save",
+      "saved": "Config saved",
+      "loadFailed": "Failed to load OMP config",
+      "saveFailed": "Failed to save OMP config",
+      "modelRoles": {
+        "title": "Model Roles",
+        "default": "Default",
+        "smol": "Fast",
+        "slow": "Thinking",
+        "vision": "Vision",
+        "plan": "Architect",
+        "designer": "Designer",
+        "commit": "Commit",
+        "task": "Subtask",
+        "hint": "Format: provider/model:thinking_level, e.g. xiaomi/mimo-v2.5-pro:high"
+      },
+      "thinkingLevel": "Default Thinking Level",
+      "showTokenUsage": "Show Token Usage",
+      "showTokenUsageHint": "Display token usage stats in terminal output"
+    }
   }
 }

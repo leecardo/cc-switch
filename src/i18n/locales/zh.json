@@ -2689,5 +2689,30 @@
     "expiredHint": "请运行 {{tool}} 命令刷新登录",
     "queryFailed": "查询失败",
     "refresh": "刷新"
+  },
+  "omp": {
+    "config": {
+      "title": "OMP 运行时配置",
+      "description": "编辑 config.yml 中的模型角色和显示设置",
+      "save": "保存",
+      "saved": "配置已保存",
+      "loadFailed": "加载 OMP 配置失败",
+      "saveFailed": "保存 OMP 配置失败",
+      "modelRoles": {
+        "title": "模型角色",
+        "default": "默认",
+        "smol": "快速",
+        "slow": "推理",
+        "vision": "视觉",
+        "plan": "架构",
+        "designer": "设计",
+        "commit": "提交",
+        "task": "子任务",
+        "hint": "格式：provider/model:thinking_level，例如 xiaomi/mimo-v2.5-pro:high"
+      },
+      "thinkingLevel": "默认 Thinking 级别",
+      "showTokenUsage": "显示 Token 用量",
+      "showTokenUsageHint": "在终端输出中显示 token 使用统计"
+    }
   }
 }

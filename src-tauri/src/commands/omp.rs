@@ -39,3 +39,20 @@ pub fn remove_omp_provider_from_live(
     omp_config::remove_provider(&providerId).map_err(|e| e.to_string())?;
     Ok(true)
 }
+
+// ============================================================================
+// OMP Config Commands
+// ============================================================================
+
+/// 读取 OMP config.yml 并返回 JSON。
+#[tauri::command]
+pub fn get_omp_config() -> Result<serde_json::Value, String> {
+    omp_config::get_config_json().map_err(|e| e.to_string())
+}
+
+/// 更新 OMP config.yml（只合并允许的字段）。
+#[tauri::command]
+pub fn update_omp_config(config: serde_json::Value) -> Result<bool, String> {
+    omp_config::update_config(config).map_err(|e| e.to_string())?;
+    Ok(true)
+}

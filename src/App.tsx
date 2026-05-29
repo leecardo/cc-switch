@@ -63,6 +63,7 @@ import { ProviderList } from "@/components/providers/ProviderList";
 import { AddProviderDialog } from "@/components/providers/AddProviderDialog";
 import { EditProviderDialog } from "@/components/providers/EditProviderDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { OmpConfigPanel } from "@/components/settings/OmpConfigPanel";
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import { UpdateBadge } from "@/components/UpdateBadge";
 import { EnvWarningBanner } from "@/components/env/EnvWarningBanner";
@@ -988,6 +989,7 @@ function App() {
                             : undefined
                       }
                     />
+                    {activeApp === "omp" && <OmpConfigPanel />}
                   </motion.div>
                 </AnimatePresence>
               </div>
@@ -995,7 +997,6 @@ function App() {
           );
       }
     })();
-
     return (
       <AnimatePresence mode="wait">
         <motion.div
