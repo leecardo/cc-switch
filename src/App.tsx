@@ -989,7 +989,7 @@ function App() {
                             : undefined
                       }
                     />
-                    {activeApp === "omp" && <OmpConfigPanel />}
+                    {activeApp === "omp" && <OmpConfigPanel providers={providers} />}
                   </motion.div>
                 </AnimatePresence>
               </div>

@@ -74,7 +74,7 @@ function buildModelValue(model: string, thinking: string): string {
   return `${model}:${thinking}`;
 }
 
-export function OmpConfigPanel() {
+export function OmpConfigPanel({ providers }: { providers?: Record<string, unknown> }) {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -82,18 +82,27 @@ export function OmpConfigPanel() {
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [newRoleKey, setNewRoleKey] = useState("");
 
+  // 初始加载 config
   useEffect(() => {
-    Promise.all([ompConfigApi.getConfig(), ompConfigApi.getAvailableModels()])
-      .then(([c, models]) => {
-        setConfig(c);
-        setAvailableModels(models);
-      })
+    ompConfigApi
+      .getConfig()
+      .then((c) => setConfig(c))
       .catch((e) => {
-        console.error("[OmpConfigPanel] Failed to load", e);
+        console.error("[OmpConfigPanel] Failed to load config", e);
         toast.error(t("omp.config.loadFailed"));
       })
       .finally(() => setLoading(false));
   }, [t]);
+
+  // providers 变更时刷新模型列表
+  useEffect(() => {
+    ompConfigApi
+      .getAvailableModels()
+      .then(setAvailableModels)
+      .catch((e) =>
+        console.error("[OmpConfigPanel] Failed to refresh models", e),
+      );
+  }, [providers]);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
