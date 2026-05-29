@@ -1370,10 +1370,33 @@ impl ProviderService {
             if !live_config_managed {
                 return Ok(true);
             }
+            // OMP: if the provider_key changed, remove the old entry from models.yml
+            if matches!(app_type, AppType::Omp) {
+                let old_key = existing_provider
+                    .as_ref()
+                    .and_then(|p| {
+                        p.settings_config
+                            .as_object()
+                            .and_then(|obj| obj.get("provider_key"))
+                            .and_then(|v| v.as_str())
+                            .map(String::from)
+                    })
+                    .unwrap_or_else(|| original_id.clone());
+                let new_key = provider
+                    .settings_config
+                    .as_object()
+                    .and_then(|obj| obj.get("provider_key"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(&provider.id);
+                if old_key != new_key {
+                    if let Err(e) = crate::omp_config::remove_provider(&old_key) {
+                        log::warn!("Failed to remove old OMP provider '{}' from models.yml: {}", old_key, e);
+                    }
+                }
+            }
             write_live_with_common_config(state.db.as_ref(), &app_type, &provider)?;
             return Ok(true);
         }
-
         // Save to database
         state.db.save_provider(app_type.as_str(), &provider)?;
 
