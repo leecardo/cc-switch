@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { Loader2, Save } from "lucide-react";
+import { Loader2, Save, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,22 +17,28 @@ import { ompConfigApi, type OmpConfig } from "@/lib/api/omp";
 
 const THINKING_LEVELS = ["none", "low", "medium", "high", "xhigh"] as const;
 
-const MODEL_ROLE_KEYS = [
-  { key: "default", labelKey: "omp.config.modelRoles.default" },
-  { key: "smol", labelKey: "omp.config.modelRoles.smol" },
-  { key: "slow", labelKey: "omp.config.modelRoles.slow" },
-  { key: "vision", labelKey: "omp.config.modelRoles.vision" },
-  { key: "plan", labelKey: "omp.config.modelRoles.plan" },
-  { key: "designer", labelKey: "omp.config.modelRoles.designer" },
-  { key: "commit", labelKey: "omp.config.modelRoles.commit" },
-  { key: "task", labelKey: "omp.config.modelRoles.task" },
-] as const;
+/** 已知 role 的默认标签映射（仅用于显示，不阻止自定义 key） */
+const KNOWN_ROLE_LABELS: Record<string, string> = {
+  default: "Default",
+  smol: "Fast",
+  slow: "Thinking",
+  vision: "Vision",
+  plan: "Architect",
+  designer: "Designer",
+  commit: "Commit",
+  task: "Subtask",
+};
+
+function getRoleLabel(key: string): string {
+  return KNOWN_ROLE_LABELS[key] ?? key;
+}
 
 export function OmpConfigPanel() {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [config, setConfig] = useState<OmpConfig>({});
+  const [newRoleKey, setNewRoleKey] = useState("");
 
   useEffect(() => {
     ompConfigApi
@@ -58,15 +64,42 @@ export function OmpConfigPanel() {
     }
   }, [config, t]);
 
-  const setModelRole = useCallback(
-    (role: string, value: string) => {
-      setConfig((prev) => ({
-        ...prev,
-        modelRoles: { ...prev.modelRoles, [role]: value },
-      }));
-    },
-    [],
-  );
+  const setModelRole = useCallback((role: string, value: string) => {
+    setConfig((prev) => ({
+      ...prev,
+      modelRoles: { ...prev.modelRoles, [role]: value },
+    }));
+  }, []);
+
+  const removeModelRole = useCallback((role: string) => {
+    setConfig((prev) => {
+      const { [role]: _, ...rest } = prev.modelRoles ?? {};
+      return { ...prev, modelRoles: rest };
+    });
+  }, []);
+
+  const renameModelRole = useCallback((oldKey: string, newKey: string) => {
+    if (!newKey.trim() || oldKey === newKey) return;
+    setConfig((prev) => {
+      const roles = { ...prev.modelRoles };
+      const value = roles[oldKey];
+      delete roles[oldKey];
+      roles[newKey] = value;
+      return { ...prev, modelRoles: roles };
+    });
+  }, []);
+
+  const addModelRole = useCallback(() => {
+    const key = newRoleKey.trim().toLowerCase().replace(/\s+/g, "-");
+    if (!key || config.modelRoles?.[key] !== undefined) return;
+    setConfig((prev) => ({
+      ...prev,
+      modelRoles: { ...prev.modelRoles, [key]: "" },
+    }));
+    setNewRoleKey("");
+  }, [newRoleKey, config.modelRoles]);
+
+  const roleEntries = Object.entries(config.modelRoles ?? {});
 
   if (loading) {
     return (
@@ -81,9 +114,7 @@ export function OmpConfigPanel() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-base font-semibold">
-            {t("omp.config.title")}
-          </h3>
+          <h3 className="text-base font-semibold">{t("omp.config.title")}</h3>
           <p className="text-sm text-muted-foreground">
             {t("omp.config.description")}
           </p>
@@ -98,26 +129,63 @@ export function OmpConfigPanel() {
         </Button>
       </div>
 
-      {/* Model Roles */}
+      {/* Model Roles - dynamic list */}
       <div className="space-y-3">
         <Label className="text-sm font-medium">
           {t("omp.config.modelRoles.title")}
         </Label>
+
         <div className="grid gap-2">
-          {MODEL_ROLE_KEYS.map(({ key, labelKey }) => (
-            <div key={key} className="flex items-center gap-3">
-              <Label className="w-16 text-sm text-muted-foreground shrink-0">
-                {t(labelKey)}
-              </Label>
+          {roleEntries.map(([key, value]) => (
+            <div key={key} className="flex items-center gap-2">
+              {/* Role key (editable) */}
               <Input
-                value={config.modelRoles?.[key] ?? ""}
+                value={key}
+                onChange={(e) => renameModelRole(key, e.target.value)}
+                className="w-28 font-mono text-sm shrink-0"
+                title={getRoleLabel(key)}
+              />
+              {/* Model value */}
+              <Input
+                value={value ?? ""}
                 onChange={(e) => setModelRole(key, e.target.value)}
                 placeholder="provider/model:thinking"
                 className="flex-1 font-mono text-sm"
               />
+              {/* Delete */}
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                onClick={() => removeModelRole(key)}
+                title={t("omp.config.modelRoles.remove")}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
             </div>
           ))}
         </div>
+
+        {/* Add new role */}
+        <div className="flex items-center gap-2">
+          <Input
+            value={newRoleKey}
+            onChange={(e) => setNewRoleKey(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addModelRole()}
+            placeholder={t("omp.config.modelRoles.newKeyPlaceholder")}
+            className="w-28 font-mono text-sm shrink-0"
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={addModelRole}
+            disabled={!newRoleKey.trim()}
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            {t("omp.config.modelRoles.add")}
+          </Button>
+        </div>
+
         <p className="text-xs text-muted-foreground">
           {t("omp.config.modelRoles.hint")}
         </p>

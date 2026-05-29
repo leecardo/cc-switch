@@ -2708,7 +2708,10 @@
         "designer": "Designer",
         "commit": "Commit",
         "task": "Subtask",
-        "hint": "Format: provider/model:thinking_level, e.g. xiaomi/mimo-v2.5-pro:high"
+        "hint": "Format: provider/model:thinking_level, e.g. xiaomi/mimo-v2.5-pro:high",
+        "add": "Add",
+        "remove": "Remove",
+        "newKeyPlaceholder": "new role key"
       },
       "thinkingLevel": "Default Thinking Level",
       "showTokenUsage": "Show Token Usage",
