@@ -1336,7 +1336,11 @@ pub fn run() {
             commands::set_hermes_memory,
             commands::get_hermes_memory_limits,
             commands::set_hermes_memory_enabled,
-            // Global upstream proxy
+            // OMP specific
+            commands::import_omp_providers_from_live,
+            commands::get_omp_live_provider_ids,
+            commands::get_omp_live_provider,
+            commands::remove_omp_provider_from_live,
             commands::get_global_proxy_url,
             commands::set_global_proxy_url,
             commands::test_proxy_url,

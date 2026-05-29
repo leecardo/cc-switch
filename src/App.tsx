@@ -40,6 +40,7 @@ import {
 import { checkAllEnvConflicts, checkEnvConflicts } from "@/lib/api/env";
 import { useProviderActions } from "@/hooks/useProviderActions";
 import { openclawKeys, useOpenClawHealth } from "@/hooks/useOpenClaw";
+import { ompKeys } from "@/hooks/useOmp";
 import { hermesKeys, useOpenHermesWebUI } from "@/hooks/useHermes";
 import { hermesApi } from "@/lib/api/hermes";
 import { useProxyStatus } from "@/hooks/useProxyStatus";
@@ -637,6 +638,10 @@ function App() {
         await queryClient.invalidateQueries({
           queryKey: hermesKeys.liveProviderIds,
         });
+      } else if (activeApp === "omp") {
+        await queryClient.invalidateQueries({
+          queryKey: ompKeys.liveProviderIds,
+        });
       }
       toast.success(
         t("notifications.removeFromConfigSuccess", {
@@ -954,7 +959,8 @@ function App() {
                       onRemoveFromConfig={
                         activeApp === "opencode" ||
                         activeApp === "openclaw" ||
-                        activeApp === "hermes"
+                        activeApp === "hermes" ||
+                        activeApp === "omp"
                           ? (provider) =>
                               setConfirmAction({ provider, action: "remove" })
                           : undefined

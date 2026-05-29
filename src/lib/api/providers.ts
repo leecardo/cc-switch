@@ -192,8 +192,36 @@ export const providersApi = {
   async importHermesFromLive(): Promise<number> {
     return await invoke("import_hermes_providers_from_live");
   },
-};
+  /**
+   * 从 OMP live 配置导入供应商到数据库
+   * OMP 特有功能：由于累加模式，用户可能已在 models.yml 中配置供应商
+   */
+  async importOmpFromLive(): Promise<number> {
+    return await invoke("import_omp_providers_from_live");
+  },
 
+  /**
+   * 获取 OMP live 配置中的供应商 ID 列表
+   * 用于前端判断供应商是否已添加到 models.yml
+   */
+  async getOmpLiveProviderIds(): Promise<string[]> {
+    return await invoke("get_omp_live_provider_ids");
+  },
+
+  /**
+   * 从 OMP live 配置中获取单个供应商配置
+   */
+  async getOmpLiveProvider(providerId: string): Promise<unknown> {
+    return await invoke("get_omp_live_provider", { providerId });
+  },
+
+  /**
+   * 从 OMP live 配置中移除供应商
+   */
+  async removeOmpFromLive(providerId: string): Promise<boolean> {
+    return await invoke("remove_omp_provider_from_live", { providerId });
+  },
+};
 // ============================================================================
 // 统一供应商（Universal Provider）API
 // ============================================================================

@@ -77,6 +77,17 @@ export function EditProviderDialog({
         return;
       }
 
+      // OMP uses additive mode - each provider's config is stored independently in DB
+      // Reading live config would return the full models.yml (with providers wrapper)
+      // instead of just the provider fragment, causing incorrect nested structure on save
+      if (appId === "omp") {
+        if (!cancelled) {
+          setLiveSettings(null);
+          setHasLoadedLive(true);
+        }
+        return;
+      }
+
       if (appId === "openclaw") {
         try {
           const live = await openclawApi.getLiveProvider(provider.id);

@@ -1538,12 +1538,15 @@ impl ProviderService {
             AppType::Hermes => {
                 remove_hermes_provider_from_live(id)?;
             }
+            AppType::Omp => {
+                crate::omp_config::remove_provider(id)?;
+            }
             _ => {
                 return Err(AppError::Message(format!(
                     "App {} does not support remove from live config",
                     app_type.as_str()
                 )));
-            }
+             }
         }
 
         if let Some(mut provider) = state.db.get_provider_by_id(id, app_type.as_str())? {
