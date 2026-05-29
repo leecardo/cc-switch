@@ -15,9 +15,25 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { ompConfigApi, type OmpConfig } from "@/lib/api/omp";
 
-const THINKING_LEVELS = ["none", "low", "medium", "high", "xhigh"] as const;
+const THINKING_LEVELS = [
+  "inherit",
+  "off",
+  "min",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+] as const;
 
-/** 已知 role 的默认标签映射（仅用于显示，不阻止自定义 key） */
+const DEFAULT_THINKING_LEVELS = [
+  "none",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+] as const;
+
+/** 已知 role 的默认标签 */
 const KNOWN_ROLE_LABELS: Record<string, string> = {
   default: "Default",
   smol: "Fast",
@@ -33,19 +49,47 @@ function getRoleLabel(key: string): string {
   return KNOWN_ROLE_LABELS[key] ?? key;
 }
 
+/**
+ * 解析 "provider/model:thinking" 为 { model, thinking }
+ * 无 thinking 后缀时 thinking = "inherit"
+ */
+function parseModelValue(value: string): {
+  model: string;
+  thinking: string;
+} {
+  const idx = value.lastIndexOf(":");
+  if (idx > 0) {
+    const model = value.substring(0, idx);
+    const thinking = value.substring(idx + 1);
+    if (THINKING_LEVELS.includes(thinking as any)) {
+      return { model, thinking };
+    }
+  }
+  return { model: value, thinking: "inherit" };
+}
+
+function buildModelValue(model: string, thinking: string): string {
+  if (!model) return "";
+  if (thinking === "inherit") return model;
+  return `${model}:${thinking}`;
+}
+
 export function OmpConfigPanel() {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [config, setConfig] = useState<OmpConfig>({});
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [newRoleKey, setNewRoleKey] = useState("");
 
   useEffect(() => {
-    ompConfigApi
-      .getConfig()
-      .then((c) => setConfig(c))
+    Promise.all([ompConfigApi.getConfig(), ompConfigApi.getAvailableModels()])
+      .then(([c, models]) => {
+        setConfig(c);
+        setAvailableModels(models);
+      })
       .catch((e) => {
-        console.error("[OmpConfigPanel] Failed to load config", e);
+        console.error("[OmpConfigPanel] Failed to load", e);
         toast.error(t("omp.config.loadFailed"));
       })
       .finally(() => setLoading(false));
@@ -136,34 +180,72 @@ export function OmpConfigPanel() {
         </Label>
 
         <div className="grid gap-2">
-          {roleEntries.map(([key, value]) => (
-            <div key={key} className="flex items-center gap-2">
-              {/* Role key (editable) */}
-              <Input
-                value={key}
-                onChange={(e) => renameModelRole(key, e.target.value)}
-                className="w-28 font-mono text-sm shrink-0"
-                title={getRoleLabel(key)}
-              />
-              {/* Model value */}
-              <Input
-                value={value ?? ""}
-                onChange={(e) => setModelRole(key, e.target.value)}
-                placeholder="provider/model:thinking"
-                className="flex-1 font-mono text-sm"
-              />
-              {/* Delete */}
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                onClick={() => removeModelRole(key)}
-                title={t("omp.config.modelRoles.remove")}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          ))}
+          {roleEntries.map(([key, value]) => {
+            const { model, thinking } = parseModelValue(value ?? "");
+            return (
+              <div key={key} className="flex items-center gap-2">
+                {/* Role key (editable) */}
+                <Input
+                  value={key}
+                  onChange={(e) => renameModelRole(key, e.target.value)}
+                  className="w-28 font-mono text-sm shrink-0"
+                  title={getRoleLabel(key)}
+                />
+                {/* Model selector */}
+                <Select
+                  value={model}
+                  onValueChange={(m) =>
+                    setModelRole(key, buildModelValue(m, thinking))
+                  }
+                >
+                  <SelectTrigger className="flex-1 font-mono text-sm">
+                    <SelectValue
+                      placeholder={t("omp.config.modelRoles.selectModel")}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableModels.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {m}
+                      </SelectItem>
+                    ))}
+                    {/* 保留当前值即使不在 availableModels 中 */}
+                    {model && !availableModels.includes(model) && (
+                      <SelectItem value={model}>{model}</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                {/* Thinking level selector */}
+                <Select
+                  value={thinking}
+                  onValueChange={(th) =>
+                    setModelRole(key, buildModelValue(model, th))
+                  }
+                >
+                  <SelectTrigger className="w-24 shrink-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {THINKING_LEVELS.map((level) => (
+                      <SelectItem key={level} value={level}>
+                        {level}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {/* Delete */}
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                  onClick={() => removeModelRole(key)}
+                  title={t("omp.config.modelRoles.remove")}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            );
+          })}
         </div>
 
         {/* Add new role */}
@@ -206,7 +288,7 @@ export function OmpConfigPanel() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {THINKING_LEVELS.map((level) => (
+            {DEFAULT_THINKING_LEVELS.map((level) => (
               <SelectItem key={level} value={level}>
                 {level}
               </SelectItem>

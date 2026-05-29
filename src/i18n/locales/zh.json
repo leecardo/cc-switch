@@ -2711,7 +2711,8 @@
         "hint": "格式：provider/model:thinking_level，例如 xiaomi/mimo-v2.5-pro:high",
         "add": "添加",
         "remove": "删除",
-        "newKeyPlaceholder": "新 role 名"
+        "newKeyPlaceholder": "新 role 名",
+        "selectModel": "选择模型"
       },
       "thinkingLevel": "默认 Thinking 级别",
       "showTokenUsage": "显示 Token 用量",

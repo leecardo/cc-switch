@@ -1,13 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export interface OmpConfig {
-  modelRoles?: {
-    default?: string;
-    slow?: string;
-    smol?: string;
-    plan?: string;
-    vision?: string;
-  };
+  modelRoles?: Record<string, string>;
   defaultThinkingLevel?: string;
   display?: {
     showTokenUsage?: boolean;
@@ -22,5 +16,10 @@ export const ompConfigApi = {
 
   async updateConfig(config: OmpConfig): Promise<boolean> {
     return await invoke("update_omp_config", { config });
+  },
+
+  /** 获取 models.yml 中所有 provider/model 列表 */
+  async getAvailableModels(): Promise<string[]> {
+    return await invoke("get_omp_available_models");
   },
 };

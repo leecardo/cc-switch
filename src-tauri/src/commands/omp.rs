@@ -56,3 +56,21 @@ pub fn update_omp_config(config: serde_json::Value) -> Result<bool, String> {
     omp_config::update_config(config).map_err(|e| e.to_string())?;
     Ok(true)
 }
+
+/// 获取 models.yml 中所有 provider 的 model 列表。
+/// 返回 ["provider/model_id", ...] 格式的扁平列表。
+#[tauri::command]
+pub fn get_omp_available_models() -> Result<Vec<String>, String> {
+    let providers = omp_config::get_providers().map_err(|e| e.to_string())?;
+    let mut models = Vec::new();
+    for (provider_id, config) in &providers {
+        if let Some(arr) = config.get("models").and_then(|v| v.as_array()) {
+            for m in arr {
+                if let Some(id) = m.get("id").and_then(|v| v.as_str()) {
+                    models.push(format!("{provider_id}/{id}"));
+                }
+            }
+        }
+    }
+    Ok(models)
+}

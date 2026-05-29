@@ -2711,7 +2711,8 @@
         "hint": "Format: provider/model:thinking_level, e.g. xiaomi/mimo-v2.5-pro:high",
         "add": "Add",
         "remove": "Remove",
-        "newKeyPlaceholder": "new role key"
+        "newKeyPlaceholder": "new role key",
+        "selectModel": "Select model"
       },
       "thinkingLevel": "Default Thinking Level",
       "showTokenUsage": "Show Token Usage",

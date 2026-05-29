@@ -1343,6 +1343,7 @@ pub fn run() {
             commands::remove_omp_provider_from_live,
             commands::get_omp_config,
             commands::update_omp_config,
+            commands::get_omp_available_models,
             commands::set_global_proxy_url,
             commands::test_proxy_url,
             commands::get_upstream_proxy_status,
