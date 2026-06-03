@@ -202,6 +202,8 @@ impl Provider {
                 );
                 (base_url, api_key)
             }
+            // OMP stores credentials in models.yml, not in a flat config format.
+            AppType::Omp => (String::new(), String::new()),
         };
 
         // Normalize like the JS-script path (extract_base_url_from_provider) so a
